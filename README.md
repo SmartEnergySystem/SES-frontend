@@ -4,6 +4,7 @@
 
 **版本：** 1.0.0
 **最后更新时间：** 2025年5月31日
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SmartEnergySystem/SES-frontend)
 
 ![1748702291227](image/README/1748702291227.png)
 
