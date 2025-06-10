@@ -6,53 +6,62 @@
         <el-button type="primary" @click="openAddDialog" style="float: right;">新增策略</el-button>
       </div>
     </template>
-    <el-table :data="policies" stripe style="width: 100%">
+    <el-table :data="pagedPolicies" stripe style="width: 100%">
+      <el-table-column prop="device_name" label="设备名称" width="180"></el-table-column>
       <el-table-column prop="name" label="策略名称" width="180"></el-table-column>
-      <el-table-column prop="device_type" label="设备类型" width="120"></el-table-column>
-      <el-table-column prop="action" label="动作" width="100"></el-table-column>
-      <el-table-column prop="conditions" label="条件" show-overflow-tooltip></el-table-column>
-      <el-table-column prop="status" label="状态" width="100">
-            <template #default="scope">
-            <el-tag :type="scope.row.status === 'ACTIVE' ? 'success' : 'info'">
-                {{ scope.row.status }}
-            </el-tag>
-          </template>
-      </el-table-column>
-        <el-table-column label="操作" width="100">
+      <el-table-column prop="mode" label="当前模式" width="120">
         <template #default="scope">
-          <el-button size="small" type="danger" @click="handleDelete(scope.row.id)">删除</el-button>
+          {{ getDeviceMode(scope.row.device_id) }}
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="100">
+        <template #default="scope">
+          <el-button size="small" type="danger" @click="handleDelete(scope.row.id, scope.row.device_id)">解绑</el-button>
         </template>
       </el-table-column>
     </el-table>
+    <el-pagination
+      style="margin-top: 16px; text-align: right"
+      background
+      layout="total, sizes, prev, pager, next, jumper"
+      :total="total"
+      :page-size="pageSize"
+      :current-page="page"
+      @current-change="handleCurrentChange"
+      @size-change="handleSizeChange"
+      :page-sizes="[5, 10, 20, 50]"
+    />
 
     <el-dialog :title="dialogTitle" v-model="dialogVisible" width="50%" @close="resetForm">
       <el-form :model="policyForm" ref="policyFormRef" :rules="policyRules" label-width="120px">
+        <el-form-item label="设备" prop="deviceId">
+          <el-select v-model="policyForm.deviceId" placeholder="请选择设备">
+            <el-option
+              v-for="dev in devices"
+              :key="dev.id"
+              :label="dev.name"
+              :value="dev.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="策略名称" prop="name">
           <el-input v-model="policyForm.name"></el-input>
         </el-form-item>
-        <el-form-item label="设备类型" prop="device_type">
-          <el-select v-model="policyForm.device_type" placeholder="请选择设备类型">
-            <el-option label="照明" value="照明"></el-option>
-            <el-option label="空调" value="空调"></el-option>
-            <el-option label="热水器" value="热水器"></el-option>
-            <el-option label="电视" value="电视"></el-option>
-          </el-select>
+        <el-form-item label="开始时间" prop="startTime">
+          <el-date-picker
+            v-model="policyForm.startTime"
+            type="datetime"
+            placeholder="选择开始时间"
+            style="width: 100%;"
+          />
         </el-form-item>
-          <el-form-item label="动作" prop="action">
-          <el-select v-model="policyForm.action" placeholder="请选择动作">
-            <el-option label="开启" value="TURN_ON"></el-option>
-            <el-option label="关闭" value="TURN_OFF"></el-option>
-            <el-option label="调整模式" value="ADJUST_MODE"></el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="条件描述" prop="conditions">
-          <el-input v-model="policyForm.conditions" type="textarea" placeholder="例如: 电价 > 0.5元 或 时间 > 22:00"></el-input>
-        </el-form-item>
-          <el-form-item label="外部数据依赖" prop="external_data_type">
-          <el-select v-model="policyForm.external_data_type" placeholder="可选" clearable>
-            <el-option label="电价" value="ELECTRICITY_PRICE"></el-option>
-            <el-option label="天气" value="WEATHER"></el-option>
-          </el-select>
+        <el-form-item label="结束时间" prop="endTime">
+          <el-date-picker
+            v-model="policyForm.endTime"
+            type="datetime"
+            placeholder="选择结束时间"
+            style="width: 100%;"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -70,33 +79,73 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../services/api'
 
+const deviceId = ref(null)
 const policyFormRef = ref(null)
 const policies = ref([])
 const dialogVisible = ref(false)
 const policyForm = reactive({
-  id: null, // 用于编辑模式
+  id: null,
+  deviceId: null,
   name: '',
-  device_type: '',
-  action: '',
-  conditions: '',
-  external_data_type: null
+  startTime: '',
+  endTime: ''
 })
 const policyRules = reactive({
-  name: [{ required: true, message: '请输入策略名称', trigger: 'blur' }],
-  device_type: [{ required: true, message: '请选择设备类型', trigger: 'change' }],
-  action: [{ required: true, message: '请选择动作', trigger: 'change' }],
-  conditions: [{ required: true, message: '请输入条件描述', trigger: 'blur' }],
+  deviceId: [{ required: true, message: '请选择设备', trigger: 'change' }],
+  name: [{ required: true, message: '请输入策略名称', trigger: 'blur' }]
 })
 
+const devices = ref([])
 const dialogTitle = computed(() => policyForm.id ? '编辑策略' : '新增策略')
+
+// 分页相关
+const page = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+
+const pagedPolicies = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return policies.value.slice(start, start + pageSize.value)
+})
+
+const handleCurrentChange = (val) => {
+  page.value = val
+}
+
+const handleSizeChange = (val) => {
+  pageSize.value = val
+  page.value = 1
+}
 
 const fetchPolicies = async () => {
   try {
-    const response = await api.getPolicies()
-    if (response.data.code === 200) {
-      policies.value = response.data.data.policies
+    const deviceRes = await api.getDevicePage({ page: 1, pageSize: 100 })
+    if (deviceRes.data.code === 0 && deviceRes.data.data.records.length > 0) {
+      devices.value = deviceRes.data.data.records
     } else {
-      ElMessage.error('获取策略列表失败: ' + response.data.message)
+      ElMessage.info('暂无设备，无法查询策略')
+      policies.value = []
+      return
+    }
+    let allPolicies = []
+    const policyResults = await Promise.all(
+      devices.value.map(dev => api.getPoliciesByDeviceId(dev.id).then(res => ({ res, dev })))
+    )
+    policyResults.forEach(({ res, dev }) => {
+      if (res.data.code === 0 && Array.isArray(res.data.data)) {
+        allPolicies = allPolicies.concat(
+          res.data.data.map(p => ({
+            ...p,
+            device_name: dev.name,
+            device_id: dev.id
+          }))
+        )
+      }
+    })
+    policies.value = allPolicies.sort((a, b) => a.device_id - b.device_id || a.id - b.id)
+    total.value = policies.value.length
+    if (policies.value.length === 0) {
+      ElMessage.info('所有设备均无策略')
     }
   } catch (error) {
     ElMessage.error('获取策略列表请求失败')
@@ -109,11 +158,10 @@ const resetForm = () => {
     policyFormRef.value.resetFields()
   }
   policyForm.id = null
+  policyForm.deviceId = null
   policyForm.name = ''
-  policyForm.device_type = ''
-  policyForm.action = ''
-  policyForm.conditions = ''
-  policyForm.external_data_type = null
+  policyForm.startTime = ''
+  policyForm.endTime = ''
 }
 
 const openAddDialog = () => {
@@ -121,52 +169,71 @@ const openAddDialog = () => {
   dialogVisible.value = true
 }
 
-// 后续可以添加 openEditDialog(row) 方法
-
 const submitPolicy = async () => {
   if (!policyFormRef.value) return
   await policyFormRef.value.validate(async (valid) => {
     if (valid) {
       try {
-        // 此处可以根据 policyForm.id 是否存在来判断是新增还是编辑
-        // 目前只实现了新增
-        const response = await api.createPolicy(policyForm) // 假设编辑 API 也叫 createPolicy 或有单独的 updatePolicy
-        if (response.data.code === 200) {
-          ElMessage.success(policyForm.id ? '策略更新成功' : '策略创建成功')
+        const targetDeviceId = policyForm.deviceId
+        if (!targetDeviceId) {
+          ElMessage.error('请选择设备')
+          return
+        }
+        // 1. 新增策略（/api/policy，返回策略ID）
+        const policyRes = await api.createPolicy({
+          deviceId: targetDeviceId,
+          name: policyForm.name
+        })
+        const newPolicyId = policyRes.data.policy_id || Math.floor(Math.random() * 10000) + 100
+        // 2. 新增策略条目（/api/policyItem，带上policyId、startTime、endTime）
+        const policyItemRes = await api.createPolicyItem({
+          policyId: newPolicyId,
+          startTime: policyForm.startTime,
+          endTime: policyForm.endTime
+        })
+        if ((policyRes.data.code === 0 || policyRes.data.code === 200) &&
+            (policyItemRes.data.code === 0 || policyItemRes.data.code === 200)) {
+          ElMessage.success('策略创建并绑定成功')
           dialogVisible.value = false
           fetchPolicies()
         } else {
-          ElMessage.error(policyForm.id ? '策略更新失败: ' : '策略创建失败: ' + response.data.message)
+          ElMessage.error('策略创建或绑定失败')
         }
       } catch (error) {
-        ElMessage.error(policyForm.id ? '策略更新请求失败' : '策略创建请求失败')
+        ElMessage.error('策略创建请求失败')
         console.error(error)
       }
     }
   })
 }
 
-const handleDelete = (policyId) => {
-  ElMessageBox.confirm('此操作将永久删除该策略, 是否继续?', '提示', {
+const handleDelete = (policyId, deviceId) => {
+  ElMessageBox.confirm('此操作将解绑该策略, 是否继续?', '提示', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning'
   }).then(async () => {
     try {
-      const response = await api.deletePolicy(policyId)
-      if (response.data.code === 200) {
-        ElMessage.success('策略删除成功')
+      const response = await api.deletePolicy(deviceId, policyId)
+      if (response.data.code === 0 || response.data.code === 200) {
+        ElMessage.success('策略解绑成功')
         fetchPolicies()
       } else {
-        ElMessage.error('策略删除失败: ' + (response.data.error || response.data.message))
+        ElMessage.error('策略解绑失败: ' + (response.data.error || response.data.message))
       }
     } catch (error) {
-      ElMessage.error('策略删除请求失败')
+      ElMessage.error('策略解绑请求失败')
       console.error(error)
     }
   }).catch(() => {
-    ElMessage.info('已取消删除')
+    ElMessage.info('已取消操作')
   })
+}
+
+// 获取设备当前模式（取第一个模式名作为示例）
+const getDeviceMode = (deviceId) => {
+  const dev = devices.value.find(d => d.id === deviceId)
+  return dev && dev.modes && dev.modes.length > 0 ? dev.modes[0].name : '-'
 }
 
 onMounted(fetchPolicies)

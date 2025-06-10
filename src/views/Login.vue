@@ -49,8 +49,8 @@ const handleLogin = async () => {
       try {
         const response = await api.login(loginForm.username, loginForm.password)
         if (response.data.code === 200 && response.data.data.token) {
-          localStorage.setItem('token', response.data.data.token)
-          localStorage.setItem('userRole', response.data.data.role)
+        localStorage.setItem('token', response.data.data.token)
+        localStorage.setItem('username', response.data.data.username) 
           ElMessage.success('登录成功')
           // 检查是否有重定向地址
           const redirectPath = route.query.redirect || '/'

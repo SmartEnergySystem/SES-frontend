@@ -2,25 +2,34 @@ import Mock from 'mockjs'
 
 // 从旧代码中复制 Mock.mock(...) 的所有定义到这里
 // 例如:
-Mock.mock('/api/auth/login', 'post', (options) => {
+Mock.mock('/api/user/login', 'post', (options) => {
   const { username, password } = JSON.parse(options.body)
   if (username === 'admin' && password === 'password') {
     return {
       code: 200,
-      data: { token: 'fake-admin-token', role: 'ADMIN' },
+      data: {
+        id: 1,
+        openid: 'mock-openid-admin',
+        token: 'fake-admin-token',
+        username: 'admin'
+      },
       message: '登录成功'
     }
   } else if (username === 'user' && password === 'password') {
     return {
       code: 200,
-      data: { token: 'fake-user-token', role: 'USER' },
+      data: {
+        id: 2,
+        openid: 'mock-openid-user',
+        token: 'fake-user-token',
+        username: 'user'
+      },
       message: '登录成功'
     }
   }
   return {
     code: 401,
-    error: '用户名或密码错误',
-    message: '登录失败'
+    message: '用户名或密码错误'
   }
 })
 
@@ -81,12 +90,120 @@ Mock.mock(RegExp('/api/analytics/history' + '.*'), 'get', (options) => {
     };
 });
 
+// 策略与设备类型的合理映射
+const policyDeviceTypeMap = {
+  '夜间节能模式': '照明',
+  '峰谷电价策略': '热水器',
+  '洗衣机节能策略': '洗衣机',
+  '电视自动关闭': '电视'
+};
+
 let policyIdCounter = 1;
 const policies = [
-    { id: `p${policyIdCounter++}`, name: '夜间节能模式', rule: 'IF time > 22:00 THEN turn_off lights', status: 'ACTIVE', device_type: '照明', action: 'TURN_OFF', external_data_type: null, conditions: '时间 > 22:00' },
-    { id: `p${policyIdCounter++}`, name: '峰谷电价策略', rule: 'IF price > 0.5 THEN turn_off water_heater', status: 'ACTIVE', device_type: '热水器', action: 'TURN_OFF', external_data_type: 'ELECTRICITY_PRICE', conditions: '电价 > 0.5元' },
+    {
+      id: policyIdCounter++,
+      name: '夜间节能模式',
+      createtime: Mock.Random.datetime(),
+      updatetime: Mock.Random.datetime()
+    },
+    {
+      id: policyIdCounter++,
+      name: '峰谷电价策略',
+      createtime: Mock.Random.datetime(),
+      updatetime: Mock.Random.datetime()
+    },
+    {
+      id: policyIdCounter++,
+      name: '洗衣机节能策略',
+      createtime: Mock.Random.datetime(),
+      updatetime: Mock.Random.datetime()
+    },
+    {
+      id: policyIdCounter++,
+      name: '电视自动关闭',
+      createtime: Mock.Random.datetime(),
+      updatetime: Mock.Random.datetime()
+    },
+    {
+      id: policyIdCounter++,
+      name: '节假日模式',
+      createtime: Mock.Random.datetime(),
+      updatetime: Mock.Random.datetime()
+    },
+    {
+      id: policyIdCounter++,
+      name: '离家自动关灯',
+      createtime: Mock.Random.datetime(),
+      updatetime: Mock.Random.datetime()
+    },
+    {
+      id: policyIdCounter++,
+      name: '高温空调降温',
+      createtime: Mock.Random.datetime(),
+      updatetime: Mock.Random.datetime()
+    },
+    {
+      id: policyIdCounter++,
+      name: '低温空调制热',
+      createtime: Mock.Random.datetime(),
+      updatetime: Mock.Random.datetime()
+    }
 ];
-Mock.mock('/api/policies', 'get', () => ({ code: 200, data: { policies: policies }, message: '获取策略成功' }));
+// Mock.mock('/api/policies', 'get', () => ({ code: 200, data: { policies: policies }, message: '获取策略成功' }));
+// 模拟：根据 deviceId 查询策略
+// 查找设备类型
+const getDeviceTypeById = (deviceId) => {
+  const dev = allDevices.find(d => String(d.id) === String(deviceId));
+  return dev ? dev.type : '';
+};
+
+Mock.mock(RegExp('/api/policy/device/' + '\\d+'), 'get', (options) => {
+  const deviceId = parseInt(options.url.split('/').pop());
+  // 每个设备只返回与其设备名相关的策略（通过设备名关键词简单匹配）
+  const dev = allDevices.find(d => String(d.id) === String(deviceId));
+  let matched = [];
+  if (dev) {
+    if (dev.name.includes('空调')) {
+      matched = policies.filter(p => p.name === '夜间节能模式');
+    } else if (dev.name.includes('热水器')) {
+      matched = policies.filter(p => p.name === '峰谷电价策略');
+    } else if (dev.name.includes('洗衣机')) {
+      matched = policies.filter(p => p.name === '洗衣机节能策略');
+    } else if (dev.name.includes('电视')) {
+      matched = policies.filter(p => p.name === '电视自动关闭');
+    } else if (dev.name.includes('灯')) {
+      matched = policies.filter(p => p.name === '夜间节能模式');
+    } else {
+      matched = [];
+    }
+  }
+  const matchingPolicies = matched.map(p => ({
+    id: p.id,
+    name: p.name,
+    createtime: p.createtime,
+    updatetime: p.updatetime,
+    deviceId: deviceId
+  }));
+  return {
+    code: 0,
+    data: matchingPolicies,
+    message: ''
+  };
+});
+
+// 新增策略
+Mock.mock('/api/policy', 'post', (options) => {
+  const { deviceId, name } = JSON.parse(options.body);
+  // 这里只模拟返回成功
+  return { code: 0, data: '', message: '' };
+});
+
+// 新增策略条目
+Mock.mock('/api/policyItem', 'post', (options) => {
+  const { policyId, modeId, startTime, endTime } = JSON.parse(options.body);
+  // 这里只模拟返回成功
+  return { code: 0, data: '', message: '' };
+});
 
 Mock.mock('/api/policies', 'post', (options) => {
     const newPolicy = JSON.parse(options.body);
@@ -96,14 +213,20 @@ Mock.mock('/api/policies', 'post', (options) => {
     return { code: 200, data: { policy_id: newPolicy.id, status: 'ACTIVE' }, message: '策略创建成功' };
 });
 
-Mock.mock(RegExp('/api/policies/' + '[^/]+'), 'delete', (options) => {
+// 删除策略 mock，路径需与真实接口一致
+Mock.mock(RegExp('/api/policy/' + '[^/]+'), 'delete', (options) => {
     const id = options.url.split('/').pop();
-    const index = policies.findIndex(p => p.id === id);
+    // 兼容策略id为字符串、数字、带p前缀等
+    const index = policies.findIndex(p =>
+        String(p.id) === String(id) ||
+        String(p.id) === `p${id}` ||
+        String(id) === `p${p.id}`
+    );
     if (index !== -1) {
         policies.splice(index, 1);
-        return { code: 200, data: { deleted: true }, message: '策略删除成功' };
+        return { code: 0, data: '', message: '策略删除成功' };
     }
-    return { code: 404, error: '策略未找到', message: '策略删除失败' };
+    return { code: 404, data: '', message: '策略未找到' };
 });
 
 let alertIdCounter = 1;
@@ -139,6 +262,98 @@ Mock.mock(RegExp('/api/alerts/' + '[^/]+' + '/resolve'), 'post', (options) => {
         return { code: 200, data: { resolved: true, device_status_updated: true }, message: '告警已处理' };
     }
     return { code: 404, error: '告警未找到', message: '处理告警失败' };
+});
+
+// 设备分页查询 mock
+const allDevices = [
+  { id: 1, name: '电视1', type: '电视', status: 'ON', createtime: Mock.Random.datetime(), updatetime: Mock.Random.datetime(), modes: [{ id: 1, name: '节能模式' }, { id: 2, name: '舒适模式' }] },
+  { id: 2, name: '电视2', type: '电视', status: 'OFF', createtime: Mock.Random.datetime(), updatetime: Mock.Random.datetime(), modes: [{ id: 1, name: '节能模式' }, { id: 2, name: '舒适模式' }] },
+  { id: 3, name: '卧室灯1', type: '卧室灯', status: 'ON', createtime: Mock.Random.datetime(), updatetime: Mock.Random.datetime(), modes: [{ id: 1, name: '夜间模式' }, { id: 2, name: '阅读模式' }] },
+  { id: 4, name: '卧室灯2', type: '卧室灯', status: 'OFF', createtime: Mock.Random.datetime(), updatetime: Mock.Random.datetime(), modes: [{ id: 1, name: '夜间模式' }, { id: 2, name: '阅读模式' }] },
+  { id: 5, name: '客厅灯1', type: '客厅灯', status: 'ON', createtime: Mock.Random.datetime(), updatetime: Mock.Random.datetime(), modes: [{ id: 1, name: '夜间模式' }, { id: 2, name: '聚会模式' }] },
+  { id: 6, name: '主卧空调1', type: '主卧空调', status: 'STANDBY', createtime: Mock.Random.datetime(), updatetime: Mock.Random.datetime(), modes: [{ id: 1, name: '节能模式' }, { id: 2, name: '制热模式' }] },
+  { id: 7, name: '阳台灯1', type: '阳台灯', status: 'ON', createtime: Mock.Random.datetime(), updatetime: Mock.Random.datetime(), modes: [{ id: 1, name: '夜间模式' }] },
+  // ...如需更多设备可继续添加
+];
+
+Mock.mock(RegExp('/api/device/page.*'), 'get', (options) => {
+  const url = options.url;
+  const params = {};
+  url.replace(/([^?&=]+)=([^&]*)/g, (_, k, v) => (params[k] = decodeURIComponent(v)));
+  let records = allDevices;
+  if (params.name) {
+    records = records.filter(d => d.name.includes(params.name));
+  }
+  const page = parseInt(params.page) || 1;
+  const pageSize = parseInt(params.pageSize) || 10;
+  const total = records.length;
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize;
+  const pageRecords = records.slice(start, end);
+
+  return {
+    code: 0,
+    data: {
+      records: pageRecords,
+      total: total
+    },
+    message: ''
+  };
+});
+
+// 查询设备模式
+Mock.mock(RegExp('/api/device/' + '\\d+/mode$'), 'get', (options) => {
+  const deviceId = parseInt(options.url.match(/\/api\/device\/(\d+)\/mode/)[1]);
+  const dev = allDevices.find(d => d.id === deviceId);
+  return {
+    code: 0,
+    data: dev && dev.modes ? dev.modes : [],
+    message: ''
+  };
+});
+
+// 控制设备模式
+Mock.mock(RegExp('/api/device/' + '\\d+/mode$'), 'post', (options) => {
+  // 直接返回成功
+  return { code: 0, data: '', message: '' };
+});
+
+// 综合控制设备（解绑策略/应用策略/切换模式/控制状态等）
+Mock.mock(RegExp('/api/device/' + '\\d+$'), 'post', (options) => {
+  // 直接返回成功
+  return { code: 0, data: '', message: '' };
+});
+
+// 查询策略API（只通过 /api/policy/device/:id 返回该设备的策略）
+Mock.mock(RegExp('/api/policy/device/' + '\\d+'), 'get', (options) => {
+  const deviceId = parseInt(options.url.split('/').pop());
+  // 设备与策略的唯一绑定关系
+  const devicePolicyMap = {
+    1: '电视自动关闭',
+    2: '节假日模式',
+    3: '夜间节能模式',
+    4: '离家自动关灯',
+    5: '夜间节能模式',
+    6: '高温空调降温',
+    7: '夜间节能模式'
+  };
+  const dev = allDevices.find(d => d.id === deviceId);
+  let matched = [];
+  if (dev && devicePolicyMap[deviceId]) {
+    matched = policies.filter(p => p.name === devicePolicyMap[deviceId]);
+  }
+  const matchingPolicies = matched.map(p => ({
+    id: p.id,
+    name: p.name,
+    createtime: p.createtime,
+    updatetime: p.updatetime,
+    deviceId: deviceId
+  }));
+  return {
+    code: 0,
+    data: matchingPolicies,
+    message: ''
+  };
 });
 
 // 确保模块至少有一个导出，即使为空，以符合 ES Module 规范
