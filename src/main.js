@@ -10,9 +10,7 @@ import './assets/base.css' // 如果有全局基础样式
 // import './assets/main.css'
 
 // 引入 Mock API (仅在开发环境)
-if (import.meta.env.DEV) {
-  await import('./services/mockApi.js') // 注意：mockApi.js 需要相应调整为 ES Module
-}
+import './services/mockApi'
 
 const app = createApp(App)
 

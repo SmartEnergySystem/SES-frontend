@@ -23,6 +23,7 @@
 import Sidebar from '../components/Sidebar.vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
+import { api } from '../services/api'
 
 
 const router = useRouter()
@@ -32,9 +33,15 @@ const handleLogout = () => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
-  }).then(() => {
+  }).then(async () => {
+    try {
+      await api.logout()
+    } catch (e) {
+      // 即使接口报错也继续清理本地
+    }
     localStorage.removeItem('token')
     localStorage.removeItem('userRole')
+    localStorage.removeItem('username')
     router.push('/login')
     ElMessage.success('已成功退出登录')
   }).catch(() => {

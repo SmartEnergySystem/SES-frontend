@@ -9,7 +9,6 @@ Mock.mock('/api/user/login', 'post', (options) => {
       code: 200,
       data: {
         id: 1,
-        openid: 'mock-openid-admin',
         token: 'fake-admin-token',
         username: 'admin'
       },
@@ -20,7 +19,6 @@ Mock.mock('/api/user/login', 'post', (options) => {
       code: 200,
       data: {
         id: 2,
-        openid: 'mock-openid-user',
         token: 'fake-user-token',
         username: 'user'
       },
@@ -30,6 +28,14 @@ Mock.mock('/api/user/login', 'post', (options) => {
   return {
     code: 401,
     message: '用户名或密码错误'
+  }
+})
+
+Mock.mock('/api/user/logout', 'post', () => {
+  return {
+    code: 200,
+    data: null,
+    message: '登出成功'
   }
 })
 
@@ -159,30 +165,33 @@ const getDeviceTypeById = (deviceId) => {
 
 Mock.mock(RegExp('/api/policy/device/' + '\\d+'), 'get', (options) => {
   const deviceId = parseInt(options.url.split('/').pop());
-  // 每个设备只返回与其设备名相关的策略（通过设备名关键词简单匹配）
-  const dev = allDevices.find(d => String(d.id) === String(deviceId));
+  const dev = allDevices.find(d => d.id === deviceId);
   let matched = [];
   if (dev) {
-    if (dev.name.includes('空调')) {
-      matched = policies.filter(p => p.name === '夜间节能模式');
-    } else if (dev.name.includes('热水器')) {
-      matched = policies.filter(p => p.name === '峰谷电价策略');
-    } else if (dev.name.includes('洗衣机')) {
-      matched = policies.filter(p => p.name === '洗衣机节能策略');
-    } else if (dev.name.includes('电视')) {
-      matched = policies.filter(p => p.name === '电视自动关闭');
+    if (dev.name.includes('电视')) {
+      matched = policies.filter(p => ['电视自动关闭', '节假日模式'].includes(p.name));
+    } else if (dev.name.includes('空调')) {
+      matched = policies.filter(p => ['夜间节能模式', '高温空调降温', '低温空调制热'].includes(p.name));
     } else if (dev.name.includes('灯')) {
-      matched = policies.filter(p => p.name === '夜间节能模式');
+      matched = policies.filter(p => ['夜间节能模式', '离家自动关灯'].includes(p.name));
+    } else if (dev.name.includes('洗衣机')) {
+      matched = policies.filter(p => ['洗衣机节能策略'].includes(p.name));
+    } else if (dev.name.includes('热水器')) {
+      matched = policies.filter(p => ['峰谷电价策略'].includes(p.name));
+    } else if (dev.name.includes('冰箱')) {
+      matched = policies.filter(p => ['节假日模式'].includes(p.name));
     } else {
       matched = [];
     }
   }
+  // 不在此处计算active，直接返回策略，active由前端根据策略条目接口判断
   const matchingPolicies = matched.map(p => ({
     id: p.id,
     name: p.name,
     createtime: p.createtime,
     updatetime: p.updatetime,
     deviceId: deviceId
+    // 不带active字段
   }));
   return {
     code: 0,
@@ -200,9 +209,9 @@ Mock.mock('/api/policy', 'post', (options) => {
 
 // 新增策略条目
 Mock.mock('/api/policyItem', 'post', (options) => {
-  const { policyId, modeId, startTime, endTime } = JSON.parse(options.body);
-  // 这里只模拟返回成功
-  return { code: 0, data: '', message: '' };
+  // options.body 应为 policyItemDTO，格式与文档一致
+  // 返回 { code: 0, data: "", message: "" }
+  return { code: 0, data: "", message: "" };
 });
 
 Mock.mock('/api/policies', 'post', (options) => {
@@ -320,38 +329,170 @@ Mock.mock(RegExp('/api/device/' + '\\d+/mode$'), 'post', (options) => {
 
 // 综合控制设备（解绑策略/应用策略/切换模式/控制状态等）
 Mock.mock(RegExp('/api/device/' + '\\d+$'), 'post', (options) => {
-  // 直接返回成功
-  return { code: 0, data: '', message: '' };
+  // 按照文档返回 { code: 0, data: "", message: "" }
+  return {
+    code: 0,
+    data: "",
+    message: ""
+  };
 });
 
-// 查询策略API（只通过 /api/policy/device/:id 返回该设备的策略）
+// 查询策略API（每个设备返回与其类型相关的合理策略，并且策略条目和激活状态分离）
 Mock.mock(RegExp('/api/policy/device/' + '\\d+'), 'get', (options) => {
   const deviceId = parseInt(options.url.split('/').pop());
-  // 设备与策略的唯一绑定关系
-  const devicePolicyMap = {
-    1: '电视自动关闭',
-    2: '节假日模式',
-    3: '夜间节能模式',
-    4: '离家自动关灯',
-    5: '夜间节能模式',
-    6: '高温空调降温',
-    7: '夜间节能模式'
-  };
   const dev = allDevices.find(d => d.id === deviceId);
   let matched = [];
-  if (dev && devicePolicyMap[deviceId]) {
-    matched = policies.filter(p => p.name === devicePolicyMap[deviceId]);
+  if (dev) {
+    if (dev.name.includes('电视')) {
+      matched = policies.filter(p => ['电视自动关闭', '节假日模式'].includes(p.name));
+    } else if (dev.name.includes('空调')) {
+      matched = policies.filter(p => ['夜间节能模式', '高温空调降温', '低温空调制热'].includes(p.name));
+    } else if (dev.name.includes('灯')) {
+      matched = policies.filter(p => ['夜间节能模式', '离家自动关灯'].includes(p.name));
+    } else if (dev.name.includes('洗衣机')) {
+      matched = policies.filter(p => ['洗衣机节能策略'].includes(p.name));
+    } else if (dev.name.includes('热水器')) {
+      matched = policies.filter(p => ['峰谷电价策略'].includes(p.name));
+    } else if (dev.name.includes('冰箱')) {
+      matched = policies.filter(p => ['节假日模式'].includes(p.name));
+    } else {
+      matched = [];
+    }
   }
+  // 不在此处计算active，直接返回策略，active由前端根据策略条目接口判断
   const matchingPolicies = matched.map(p => ({
     id: p.id,
     name: p.name,
     createtime: p.createtime,
     updatetime: p.updatetime,
     deviceId: deviceId
+    // 不带active字段
   }));
   return {
     code: 0,
     data: matchingPolicies,
+    message: ''
+  };
+});
+
+// 策略条目 mock 数据
+const policyItemsMap = {
+  1: [
+    {
+      id: 1,
+      policyId: 1,
+      modeId: 1,
+      // 当前时间段内（比如8:00-23:59）
+      startTime: { hour: 8, minute: 0, second: 0, nano: 0 },
+      endTime: { hour: 23, minute: 59, second: 59, nano: 0 }
+    }
+  ],
+  2: [
+    {
+      id: 2,
+      policyId: 2,
+      modeId: 2,
+      // 当前时间段外（比如0:00-1:00）
+      startTime: { hour: 0, minute: 0, second: 0, nano: 0 },
+      endTime: { hour: 1, minute: 0, second: 0, nano: 0 }
+    }
+  ],
+  3: [
+    {
+      id: 3,
+      policyId: 3,
+      modeId: 1,
+      // 跨越当前时间段（比如0:00-23:59，始终激活）
+      startTime: { hour: 0, minute: 0, second: 0, nano: 0 },
+      endTime: { hour: 23, minute: 59, second: 59, nano: 0 }
+    }
+  ],
+  4: [
+    {
+      id: 4,
+      policyId: 4,
+      modeId: 1,
+      // 当前时间段外
+      startTime: { hour: 2, minute: 0, second: 0, nano: 0 },
+      endTime: { hour: 3, minute: 0, second: 0, nano: 0 }
+    }
+  ],
+  5: [
+    {
+      id: 5,
+      policyId: 5,
+      modeId: 1,
+      // 当前时间段内
+      startTime: { hour: 7, minute: 0, second: 0, nano: 0 },
+      endTime: { hour: 22, minute: 0, second: 0, nano: 0 }
+    }
+  ],
+  6: [
+    {
+      id: 6,
+      policyId: 6,
+      modeId: 1,
+      // 当前时间段外
+      startTime: { hour: 0, minute: 0, second: 0, nano: 0 },
+      endTime: { hour: 1, minute: 0, second: 0, nano: 0 }
+    }
+  ],
+  7: [
+    {
+      id: 7,
+      policyId: 7,
+      modeId: 1,
+      // 当前时间段内
+      startTime: { hour: 6, minute: 0, second: 0, nano: 0 },
+      endTime: { hour: 23, minute: 0, second: 0, nano: 0 }
+    }
+  ],
+  8: [
+    {
+      id: 8,
+      policyId: 8,
+      modeId: 1,
+      // 当前时间段外
+      startTime: { hour: 0, minute: 0, second: 0, nano: 0 },
+      endTime: { hour: 1, minute: 0, second: 0, nano: 0 }
+    }
+  ]
+  // 可继续添加更多策略条目
+};
+
+Mock.mock(RegExp('/api/policyItem/policy/\\d+$'), 'get', (options) => {
+  const policyId = parseInt(options.url.split('/').pop());
+  const items = policyItemsMap[policyId] || [];
+  return {
+    code: 0,
+    data: items,
+    message: ''
+  };
+});
+
+// 新增代码：设备当前状态查询接口
+Mock.mock(RegExp('/api/device/data.*'), 'get', (options) => {
+  // 解析 idList 参数
+  let idList = [];
+  if (options.url.includes('idList=')) {
+    const match = options.url.match(/idList=([^&]*)/);
+    if (match && match[1]) {
+      idList = match[1].split(',').map(id => parseInt(id));
+    }
+  }
+  // 生成 mock 数据
+  const data = (idList.length ? idList : [1,2,3]).map(id => ({
+    deviceId: id,
+    isRealTime: 1,
+    lastUpdatedTime: new Date().toISOString(),
+    modeName: id === 1 ? '节能模式' : id === 2 ? '舒适模式' : '夜间模式',
+    policyName: id === 1 ? '夜间节能模式' : id === 2 ? '节假日模式' : '高温空调降温',
+    power: 100 + id * 10,
+    status: 1 // 1=开，0=关
+  }));
+  return {
+    code: 0,
+    data,
     message: ''
   };
 });

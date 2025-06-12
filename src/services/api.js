@@ -19,10 +19,11 @@ apiClient.interceptors.request.use(config => {
 export const api = {
   //FIXME:重构login, getpolicies，createpolicy，deletepolicy，具体参照SES接口文档.md
   login: (username, password) =>
-  apiClient.post('/user/login', {
-    username,
-    password
-  }),
+    apiClient.post('/user/login', {
+      username,
+      password
+    }),
+  logout: () => apiClient.post('/user/logout'),
   getUserPermissions: () => apiClient.get('/user/permissions'),
   getLatestTelemetry: () => apiClient.get('/telemetry/latest'),
   getHistoryAnalytics: (params) => apiClient.get('/analytics/history', { params }),
@@ -47,6 +48,10 @@ export const api = {
   // 删除策略（解绑策略）统一用综合控制接口
   deletePolicy: (deviceId, policyId) =>
     apiClient.post(`/device/${deviceId}`, { isApplyPolicy: 0, policyId }),
+  getPolicyItemsByPolicyId: (policyId) =>
+    apiClient.get(`/policyItem/policy/${policyId}`),
+  getDeviceData: (idList) =>
+    apiClient.get('/device/data', { params: { idList } }),
 }
 
 // 注意：如果 Mock.js 的逻辑也放在这里，确保它只在开发环境执行

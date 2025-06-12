@@ -9,9 +9,16 @@
     <el-table :data="pagedPolicies" stripe style="width: 100%">
       <el-table-column prop="device_name" label="设备名称" width="180"></el-table-column>
       <el-table-column prop="name" label="策略名称" width="180"></el-table-column>
-      <el-table-column prop="mode" label="当前模式" width="120">
+      <el-table-column prop="modeName" label="当前模式" width="120">
         <template #default="scope">
-          {{ getDeviceMode(scope.row.device_id) }}
+          {{ scope.row.modeName || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="active" label="是否激活" width="100">
+        <template #default="scope">
+          <el-tag :type="scope.row.active ? 'success' : 'info'">
+            {{ scope.row.active ? '激活' : '未激活' }}
+          </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="100">
@@ -35,7 +42,7 @@
     <el-dialog :title="dialogTitle" v-model="dialogVisible" width="50%" @close="resetForm">
       <el-form :model="policyForm" ref="policyFormRef" :rules="policyRules" label-width="120px">
         <el-form-item label="设备" prop="deviceId">
-          <el-select v-model="policyForm.deviceId" placeholder="请选择设备">
+          <el-select v-model="policyForm.deviceId" placeholder="请选择设备" @change="handleDeviceChange">
             <el-option
               v-for="dev in devices"
               :key="dev.id"
@@ -47,19 +54,31 @@
         <el-form-item label="策略名称" prop="name">
           <el-input v-model="policyForm.name"></el-input>
         </el-form-item>
+        <el-form-item label="模式" prop="modeId">
+          <el-select v-model="policyForm.modeId" placeholder="请选择模式" :disabled="!modeList.length">
+            <el-option
+              v-for="mode in modeList"
+              :key="mode.id"
+              :label="mode.name"
+              :value="mode.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="开始时间" prop="startTime">
-          <el-date-picker
+          <el-time-picker
             v-model="policyForm.startTime"
-            type="datetime"
             placeholder="选择开始时间"
+            format="HH:mm:ss"
+            value-format="HH:mm:ss"
             style="width: 100%;"
           />
         </el-form-item>
         <el-form-item label="结束时间" prop="endTime">
-          <el-date-picker
+          <el-time-picker
             v-model="policyForm.endTime"
-            type="datetime"
             placeholder="选择结束时间"
+            format="HH:mm:ss"
+            value-format="HH:mm:ss"
             style="width: 100%;"
           />
         </el-form-item>
@@ -83,20 +102,24 @@ const deviceId = ref(null)
 const policyFormRef = ref(null)
 const policies = ref([])
 const dialogVisible = ref(false)
+const modeList = ref([]) // 当前选中设备的模式列表
 const policyForm = reactive({
   id: null,
   deviceId: null,
   name: '',
+  modeId: null,
   startTime: '',
   endTime: ''
 })
 const policyRules = reactive({
   deviceId: [{ required: true, message: '请选择设备', trigger: 'change' }],
-  name: [{ required: true, message: '请输入策略名称', trigger: 'blur' }]
+  name: [{ required: true, message: '请输入策略名称', trigger: 'blur' }],
+  modeId: [{ required: true, message: '请选择模式', trigger: 'change' }]
 })
 
 const devices = ref([])
 const dialogTitle = computed(() => policyForm.id ? '编辑策略' : '新增策略')
+const deviceStatusMap = ref({}) // deviceId -> { modeName, ... }
 
 // 分页相关
 const page = ref(1)
@@ -127,13 +150,25 @@ const fetchPolicies = async () => {
       policies.value = []
       return
     }
+    // 获取所有设备的当前状态
+    const idList = devices.value.map(d => d.id)
+    const deviceDataRes = await api.getDeviceData(idList)
+    if (deviceDataRes.data.code === 0 && Array.isArray(deviceDataRes.data.data)) {
+      deviceStatusMap.value = {}
+      deviceDataRes.data.data.forEach(d => {
+        deviceStatusMap.value[d.deviceId] = d
+      })
+    }
+    // 查询每个设备的所有策略（展示所有策略，无论激活与否）
     let allPolicies = []
     const policyResults = await Promise.all(
       devices.value.map(dev => api.getPoliciesByDeviceId(dev.id).then(res => ({ res, dev })))
     )
+    // 展开所有策略
+    let policyList = []
     policyResults.forEach(({ res, dev }) => {
       if (res.data.code === 0 && Array.isArray(res.data.data)) {
-        allPolicies = allPolicies.concat(
+        policyList = policyList.concat(
           res.data.data.map(p => ({
             ...p,
             device_name: dev.name,
@@ -142,7 +177,25 @@ const fetchPolicies = async () => {
         )
       }
     })
-    policies.value = allPolicies.sort((a, b) => a.device_id - b.device_id || a.id - b.id)
+    // 查询每个策略的条目，并判断激活状态
+    const now = new Date()
+    const nowSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+    const withItems = await Promise.all(policyList.map(async (policy) => {
+      const itemsRes = await api.getPolicyItemsByPolicyId(policy.id)
+      let active = false
+      if (itemsRes.data.code === 0 && Array.isArray(itemsRes.data.data)) {
+        // 判断当前时间是否在任一条目时间段内
+        active = itemsRes.data.data.some(item => {
+          const start = (item.startTime.hour || 0) * 3600 + (item.startTime.minute || 0) * 60 + (item.startTime.second || 0)
+          const end = (item.endTime.hour || 0) * 3600 + (item.endTime.minute || 0) * 60 + (item.endTime.second || 0)
+          return nowSeconds >= start && nowSeconds <= end
+        })
+      }
+      // 增加modeName
+      const modeName = deviceStatusMap.value[policy.device_id]?.modeName || '-'
+      return { ...policy, active, modeName }
+    }))
+    policies.value = withItems.sort((a, b) => a.device_id - b.device_id || a.id - b.id)
     total.value = policies.value.length
     if (policies.value.length === 0) {
       ElMessage.info('所有设备均无策略')
@@ -160,6 +213,7 @@ const resetForm = () => {
   policyForm.id = null
   policyForm.deviceId = null
   policyForm.name = ''
+  policyForm.modeId = null
   policyForm.startTime = ''
   policyForm.endTime = ''
 }
@@ -167,6 +221,31 @@ const resetForm = () => {
 const openAddDialog = () => {
   resetForm()
   dialogVisible.value = true
+}
+
+const handleDeviceChange = async (deviceId) => {
+  policyForm.modeId = null
+  modeList.value = []
+  if (!deviceId) return
+  try {
+    const res = await api.getDeviceModes(deviceId)
+    if (res.data.code === 0 && Array.isArray(res.data.data)) {
+      modeList.value = res.data.data
+    }
+  } catch (e) {
+    modeList.value = []
+  }
+}
+
+function parseTimeStrToObj(timeStr) {
+  if (!timeStr) return { hour: 0, minute: 0, second: 0, nano: 0 }
+  const [hour, minute, second] = timeStr.split(':').map(Number)
+  return {
+    hour: hour || 0,
+    minute: minute || 0,
+    second: second || 0,
+    nano: 0
+  }
 }
 
 const submitPolicy = async () => {
@@ -185,11 +264,12 @@ const submitPolicy = async () => {
           name: policyForm.name
         })
         const newPolicyId = policyRes.data.policy_id || Math.floor(Math.random() * 10000) + 100
-        // 2. 新增策略条目（/api/policyItem，带上policyId、startTime、endTime）
+        // 2. 新增策略条目（/api/policyItem，带上policyId、modeId、startTime、endTime）
         const policyItemRes = await api.createPolicyItem({
           policyId: newPolicyId,
-          startTime: policyForm.startTime,
-          endTime: policyForm.endTime
+          modeId: policyForm.modeId,
+          startTime: parseTimeStrToObj(policyForm.startTime),
+          endTime: parseTimeStrToObj(policyForm.endTime)
         })
         if ((policyRes.data.code === 0 || policyRes.data.code === 200) &&
             (policyItemRes.data.code === 0 || policyItemRes.data.code === 200)) {
