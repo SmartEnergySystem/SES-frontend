@@ -17,41 +17,45 @@ apiClient.interceptors.request.use(config => {
 
 // 从旧代码中复制并调整 API 函数
 export const api = {
-  //FIXME:重构login, getpolicies，createpolicy，deletepolicy，具体参照SES接口文档.md
   login: (username, password) =>
     apiClient.post('/user/login', {
       username,
-      password
+      password,
     }),
   logout: () => apiClient.post('/user/logout'),
-  getUserPermissions: () => apiClient.get('/user/permissions'),
   getLatestTelemetry: () => apiClient.get('/telemetry/latest'),
   getHistoryAnalytics: (params) => apiClient.get('/analytics/history', { params }),
-  getPoliciesByDeviceId: (deviceId) =>
-    apiClient.get(`/policy/device/${deviceId}`),
+  getPoliciesByDeviceId: (deviceId) => apiClient.get(`/policy/device/${deviceId}`),
   createPolicy: ({ deviceId, name }) => apiClient.post('/policy', { deviceId, name }),
   createPolicyItem: (policyItemDTO) => apiClient.post('/policyItem', policyItemDTO),
   getAlerts: (params) => apiClient.get('/alerts', { params }),
   resolveAlert: (alertId, actionData) => apiClient.post(`/alerts/${alertId}/resolve`, actionData),
-  getDevicePage: (params) => apiClient.get('/device/page', { params }),
+
   // 综合控制设备（解绑策略/应用策略/切换模式/控制状态等）
-  controlDevice: (deviceId, controlDTO) =>
-    apiClient.post(`/device/${deviceId}`, controlDTO),
+  controlDevice: (deviceId, controlDTO) => apiClient.post(`/device/${deviceId}`, controlDTO),
 
   // 查询设备模式列表
-  getDeviceModes: (deviceId) =>
-    apiClient.get(`/device/${deviceId}/mode`),
+  getDeviceModes: (deviceId) => apiClient.get(`/device/${deviceId}/mode`),
 
   // 控制设备模式
-  setDeviceMode: (deviceId, modeId) =>
-    apiClient.post(`/device/${deviceId}/mode`, { modeId }),
+  setDeviceMode: (deviceId, modeId) => apiClient.post(`/device/${deviceId}/mode`, { modeId }),
   // 删除策略（解绑策略）统一用综合控制接口
   deletePolicy: (deviceId, policyId) =>
     apiClient.post(`/device/${deviceId}`, { isApplyPolicy: 0, policyId }),
-  getPolicyItemsByPolicyId: (policyId) =>
-    apiClient.get(`/policyItem/policy/${policyId}`),
-  getDeviceData: (idList) =>
-    apiClient.get('/device/data', { params: { idList } }),
+  getPolicyItemsByPolicyId: (policyId) => apiClient.get(`/policyItem/policy/${policyId}`),
+  getDeviceData: (idList) => apiClient.get('/device/data', { params: { idList } }),
+
+  // 设备管理接口
+  getDevicePage: (params) => apiClient.get('/device/page', { params }),
+  // 新增设备 (POST /api/device)
+  // deviceDTO 的格式为 { name: string, type: string }
+  addDevice: (deviceDTO) => apiClient.post('/device', deviceDTO),
+
+  // 删除设备 (DELETE /api/device/{id})
+  deleteDevice: (deviceId) => apiClient.delete(`/device/${deviceId}`),
+
+  // 修改设备名称 (PUT /api/device/{id}/name)
+  editDeviceName: (deviceId, name) => apiClient.put(`/device/${deviceId}/name`, { name }),
 }
 
 // 注意：如果 Mock.js 的逻辑也放在这里，确保它只在开发环境执行
