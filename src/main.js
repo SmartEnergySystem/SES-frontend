@@ -10,7 +10,7 @@ import './assets/base.css' // 如果有全局基础样式
 // import './assets/main.css'
 
 // 引入 Mock API (仅在开发环境)
-import './services/mockApi'
+// import './services/mockApi'
 
 const app = createApp(App)
 
