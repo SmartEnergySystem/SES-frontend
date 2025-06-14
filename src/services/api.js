@@ -28,8 +28,7 @@ export const api = {
   getPoliciesByDeviceId: (deviceId) => apiClient.get(`/policy/device/${deviceId}`),
   createPolicy: ({ deviceId, name }) => apiClient.post('/policy', { deviceId, name }),
   createPolicyItem: (policyItemDTO) => apiClient.post('/policyItem', policyItemDTO),
-  getAlerts: (params) => apiClient.get('/alerts', { params }),
-  resolveAlert: (alertId, actionData) => apiClient.post(`/alerts/${alertId}/resolve`, actionData),
+  getAlertReport: (deviceId, alertReportDto) => apiClient.post(`/device/${deviceId}/alertReport`, alertReportDto),
 
   // 综合控制设备（解绑策略/应用策略/切换模式/控制状态等）
   controlDevice: (deviceId, controlDTO) => apiClient.post(`/device/${deviceId}`, controlDTO),

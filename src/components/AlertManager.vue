@@ -2,28 +2,45 @@
   <el-card class="box-card">
     <template #header>
       <div class="card-header">
-        <span>告警管理 (仅显示活动告警)</span>
-        <el-button type="primary" @click="fetchAlerts" style="float: right;">刷新告警</el-button>
+        <span>告警管理</span>
+        <div style="float: right; display: flex; gap: 10px;">
+          <el-select v-model="selectedDeviceId" placeholder="选择设备" style="width: 200px;" clearable>
+            <el-option
+              v-for="device in devices"
+              :key="device.id"
+              :label="device.name"
+              :value="device.id"
+            />
+          </el-select>
+          <el-date-picker
+            v-model="timeRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            clearable
+          />
+          <el-button type="primary" @click="fetchAlertReport">刷新告警</el-button>
+        </div>
       </div>
     </template>
-    <el-table :data="alerts" stripe style="width: 100%" empty-text="暂无活动告警">
+    <el-table :data="alerts" stripe style="width: 100%" empty-text="暂无告警数据">
       <el-table-column prop="timestamp" label="告警时间" :formatter="formatTimestamp" width="180"></el-table-column>
-      <el-table-column prop="device_id" label="设备ID" width="100"></el-table-column>
-      <el-table-column prop="message" label="告警信息" show-overflow-tooltip></el-table-column>
-      <el-table-column prop="severity" label="级别" width="100">
+      <el-table-column prop="deviceName" label="设备名称" width="120"></el-table-column>
+      <el-table-column prop="level" label="级别" width="100">
         <template #default="scope">
-          <el-tag :type="getSeverityType(scope.row.severity)">
-            {{ scope.row.severity }}
+          <el-tag :type="getSeverityType(scope.row.level)">
+            {{ formatLevel(scope.row.level) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="recommended_action" label="建议操作" width="120"></el-table-column>
-      <el-table-column label="操作" width="220">
+      <el-table-column prop="message" label="告警信息" show-overflow-tooltip></el-table-column>
+      <el-table-column prop="modeName" label="模式" width="120"></el-table-column>
+      <el-table-column prop="policyName" label="策略" width="120"></el-table-column>
+      <el-table-column prop="status" label="状态" width="100">
         <template #default="scope">
-          <el-button size="small" type="primary" @click="handleResolveAlert(scope.row.id, scope.row.recommended_action)">
-            处理 ({{scope.row.recommended_action}})
-          </el-button>
-            <el-button size="small" @click="handleResolveAlert(scope.row.id, 'IGNORE')">忽略</el-button>
+          {{ formatStatus(scope.row.status) }}
         </template>
       </el-table-column>
     </el-table>
@@ -31,62 +48,122 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { api } from '../services/api'
 
-const alerts = ref([])
+const devices = ref([]) // 设备列表
+const selectedDeviceId = ref(null) // 选中的设备 ID
+const timeRange = ref([]) // 时间范围 [startTime, endTime]
+const alerts = ref([]) // 告警数据
 
-const fetchAlerts = async () => {
+// 获取设备列表
+const loadDevices = async () => {
   try {
-    const response = await api.getAlerts({ status: 'active' })
-    if (response.data.code === 200) {
-      alerts.value = response.data.data.alerts
+    const response = await api.getDevicePage({ page: 1, pageSize: 100 })
+    if (response.data.code === 0 && response.data.data.records.length > 0) {
+      devices.value = response.data.data.records
     } else {
-      ElMessage.error('获取告警列表失败: ' + response.data.message)
+      ElMessage.info('暂无设备')
+      devices.value = []
     }
   } catch (error) {
-    ElMessage.error('获取告警列表请求失败')
+    ElMessage.error('获取设备列表请求失败')
+    console.error(error)
+    devices.value = []
+  }
+}
+
+// 获取告警报告
+const fetchAlertReport = async () => {
+  alerts.value = []
+  try {
+    // 构造请求的 DTO
+    const dto = timeRange.value.length === 2 ? {
+      startTime: timeRange.value[0],
+      endTime: timeRange.value[1]
+    } : {}
+
+    // 如果选择了设备，直接查询该设备的告警
+    if (selectedDeviceId.value) {
+      const response = await api.getAlertReport(selectedDeviceId.value, dto)
+      if (response.data.code === 0) {
+        const device = devices.value.find(d => String(d.id) === String(selectedDeviceId.value))
+        alerts.value = (response.data.data.alertReports || []).map(report => ({
+          ...report,
+          deviceName: device ? device.name : '未知设备' // 添加设备名称
+        }))
+      } else {
+        ElMessage.error('获取告警报告失败: ' + response.data.message)
+      }
+      return
+    }
+
+    // 未选择设备，查询所有设备的告警
+    if (devices.value.length === 0) {
+      ElMessage.info('暂无设备，无法查询告警')
+      return
+    }
+
+    // 逐个设备获取告警报告并合并
+    const alertPromises = devices.value.map(device =>
+      api.getAlertReport(device.id, dto).catch(error => {
+        console.error(`设备 ${device.id} 告警获取失败`, error)
+        return { data: { code: 0, data: { alertReports: [] } } } // 失败时返回空报告
+      })
+    )
+    const responses = await Promise.all(alertPromises)
+    responses.forEach((response, index) => {
+      if (response.data.code === 0) {
+        const device = devices.value[index]
+        alerts.value.push(
+          ...(response.data.data.alertReports || []).map(report => ({
+            ...report,
+            deviceName: device.name // 添加设备名称
+          }))
+        )
+      }
+    })
+
+    if (alerts.value.length === 0) {
+      ElMessage.info('暂无告警数据')
+    }
+  } catch (error) {
+    ElMessage.error('获取告警报告请求失败')
     console.error(error)
   }
 }
 
-const handleResolveAlert = async (alertId, action) => {
-  ElMessageBox.confirm(`确定要执行操作 "${action}" 吗?`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(async () => {
-    try {
-      const response = await api.resolveAlert(alertId, { action: action })
-      if (response.data.code === 200 && response.data.data.resolved) {
-        ElMessage.success(`告警已处理: ${action}`)
-        fetchAlerts()
-      } else {
-        ElMessage.error('处理告警失败: ' + response.data.message)
-      }
-    } catch (error) {
-      ElMessage.error('处理告警请求失败')
-      console.error(error)
-    }
-  }).catch(() => {
-    ElMessage.info('已取消操作')
-  })
+// 格式化告警级别
+const formatLevel = (level) => {
+  const levels = { 0: '低', 1: '中', 2: '高' }
+  return levels[level] || '未知'
 }
 
-const getSeverityType = (severity) => {
-  if (severity === 'HIGH') return 'danger'
-  if (severity === 'MEDIUM') return 'warning'
-  if (severity === 'LOW') return 'info'
+// 格式化告警状态
+const formatStatus = (status) => {
+  const statuses = { 0: '未处理', 1: '已处理', 2: '忽略' }
+  return statuses[status] || '未知'
+}
+
+// 格式化告警级别对应的标签类型
+const getSeverityType = (level) => {
+  if (level === 2) return 'danger' // 高
+  if (level === 1) return 'warning' // 中
+  if (level === 0) return 'info' // 低
   return ''
 }
 
+// 格式化时间戳
 const formatTimestamp = (row, column, cellValue) => {
   if (!cellValue) return ''
   return new Date(cellValue).toLocaleString()
 }
 
-onMounted(fetchAlerts)
+// 组件挂载时加载设备列表并获取默认告警
+onMounted(() => {
+  loadDevices().then(() => fetchAlertReport())
+})
 </script>
 
 <style scoped>

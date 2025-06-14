@@ -238,41 +238,6 @@ Mock.mock(RegExp('/api/policy/' + '[^/]+'), 'delete', (options) => {
     return { code: 404, data: '', message: '策略未找到' };
 });
 
-let alertIdCounter = 1;
-let activeAlerts = []; 
-const generateAlert = () => ({
-    id: `a${alertIdCounter++}`,
-    device_id: `d${Mock.Random.integer(1,5)}`,
-    message: Mock.Random.pick(['空调功率超标', '冰箱门未关紧', '洗衣机漏水风险']),
-    severity: Mock.Random.pick(['HIGH', 'MEDIUM', 'LOW']),
-    status: 'ACTIVE', 
-    timestamp: new Date(Date.now() - Mock.Random.integer(0, 3600000)).toISOString(), 
-    recommended_action: Mock.Random.pick(['关闭设备', '检查设备', '忽略'])
-});
-const resetActiveAlerts = () => {
-    alertIdCounter = 1;
-    activeAlerts = Array.from({length: Mock.Random.integer(1,3)}, generateAlert);
-};
-resetActiveAlerts(); // Initial population
-
-Mock.mock(RegExp('/api/alerts' + '.*'), 'get', (options) => {
-    // To make alerts refreshable, re-generate if specifically requested or if no alerts left
-    if (options.url.includes('status=active') && activeAlerts.filter(a => a.status === 'ACTIVE').length === 0) {
-         resetActiveAlerts();
-    }
-    return { code: 200, data: { alerts: activeAlerts.filter(a => a.status === 'ACTIVE') }, message: '获取告警成功' };
-});
-
-Mock.mock(RegExp('/api/alerts/' + '[^/]+' + '/resolve'), 'post', (options) => {
-    const alertId = options.url.split('/')[3]; 
-    const alert = activeAlerts.find(a => a.id === alertId);
-    if (alert) {
-        alert.status = 'RESOLVED'; 
-        return { code: 200, data: { resolved: true, device_status_updated: true }, message: '告警已处理' };
-    }
-    return { code: 404, error: '告警未找到', message: '处理告警失败' };
-});
-
 // 设备分页查询 mock
 const allDevices = [
   { id: 1, name: '电视1', type: '电视', status: 'ON', createtime: Mock.Random.datetime(), updatetime: Mock.Random.datetime(), modes: [{ id: 1, name: '节能模式' }, { id: 2, name: '舒适模式' }] },
@@ -496,6 +461,74 @@ Mock.mock(RegExp('/api/device/data.*'), 'get', (options) => {
     message: ''
   };
 });
+
+let alertIdCounter = 1;
+let alertReports = [];
+
+// 生成单个告警报告
+const generateAlertReport = (deviceId) => ({
+  id: `a${alertIdCounter++}`,
+  deviceId,
+  level: Mock.Random.integer(0, 2), // 0=低, 1=中, 2=高
+  message: Mock.Random.pick([
+    '设备功率超标',
+    '设备温度异常',
+    '设备通信中断',
+    '设备运行时间过长'
+  ]),
+  modeName: Mock.Random.pick(['节能模式', '舒适模式', '夜间模式', '制热模式']),
+  policyName: Mock.Random.pick([
+    '夜间节能模式',
+    '高温空调降温',
+    '节假日模式',
+    '离家自动关灯'
+  ]),
+  status: Mock.Random.integer(0, 2), // 0=未处理, 1=已处理, 2=忽略
+  timestamp: new Date(Date.now() - Mock.Random.integer(0, 7 * 24 * 60 * 60 * 1000)).toISOString() // 随机过去7天
+});
+
+// 初始化告警数据
+const resetAlertReports = () => {
+  alertIdCounter = 1;
+  alertReports = [];
+  allDevices.forEach(device => {
+    const count = Mock.Random.integer(0, 3); // 每个设备0-3条告警
+    for (let i = 0; i < count; i++) {
+      alertReports.push(generateAlertReport(device.id));
+    }
+  });
+};
+resetAlertReports();
+
+// Mock 告警报告接口
+Mock.mock(RegExp('/api/device/\\d+/alertReport'), 'post', (options) => {
+  const deviceId = parseInt(options.url.match(/\/api\/device\/(\d+)\/alertReport/)[1]);
+  const dto = JSON.parse(options.body || '{}');
+  const { startTime, endTime } = dto;
+
+  // 过滤告警数据
+  let filteredReports = alertReports.filter(report => String(report.deviceId) === String(deviceId));
+
+  // 按时间范围过滤（如果提供）
+  if (startTime && endTime) {
+    const start = new Date(startTime).getTime();
+    const end = new Date(endTime).getTime();
+    filteredReports = filteredReports.filter(report => {
+      const timestamp = new Date(report体系).getTime();
+      return timestamp >= start && timestamp <= end;
+    });
+  }
+
+  return {
+    code: 0,
+    data: {
+      alertReports: filteredReports,
+      total: filteredReports.length
+    },
+    message: ''
+  };
+}); 
+
 
 // 确保模块至少有一个导出，即使为空，以符合 ES Module 规范
 export default Mock;
