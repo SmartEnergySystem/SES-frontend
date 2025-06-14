@@ -40,6 +40,7 @@ const handleLogout = () => {
       // 即使接口报错也继续清理本地
     }
     localStorage.removeItem('token')
+    localStorage.removeItem('id')
     localStorage.removeItem('userRole')
     localStorage.removeItem('username')
     router.push('/login')

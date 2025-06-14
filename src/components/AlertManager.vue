@@ -60,7 +60,16 @@ const alerts = ref([]) // 告警数据
 // 获取设备列表
 const loadDevices = async () => {
   try {
-    const response = await api.getDevicePage({ page: 1, pageSize: 100 })
+    const token = localStorage.getItem('token')
+    const userId = localStorage.getItem('id')
+    if (!token || !userId) {
+      ElMessage.error('用户未登录，请先登录')
+      devices.value = []
+      return
+    }
+    const response = await api.getDevicePage(
+      { page: 1, pageSize: 100, userId: parseInt(userId) },
+    )
     if (response.data.code === 0 && response.data.data.records.length > 0) {
       devices.value = response.data.data.records
     } else {
@@ -78,6 +87,11 @@ const loadDevices = async () => {
 const fetchAlertReport = async () => {
   alerts.value = []
   try {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      ElMessage.error('用户未登录，请先登录')
+      return
+    }
     // 构造请求的 DTO
     const dto = timeRange.value.length === 2 ? {
       startTime: timeRange.value[0],
@@ -86,12 +100,16 @@ const fetchAlertReport = async () => {
 
     // 如果选择了设备，直接查询该设备的告警
     if (selectedDeviceId.value) {
-      const response = await api.getAlertReport(selectedDeviceId.value, dto)
+      const response = await api.getAlertReport(
+        selectedDeviceId.value,
+        dto,
+        { headers: { Token: `${token}` } }
+      )
       if (response.data.code === 0) {
         const device = devices.value.find(d => String(d.id) === String(selectedDeviceId.value))
         alerts.value = (response.data.data.alertReports || []).map(report => ({
           ...report,
-          deviceName: device ? device.name : '未知设备' // 添加设备名称
+          deviceName: device ? device.name : '未知设备'
         }))
       } else {
         ElMessage.error('获取告警报告失败: ' + response.data.message)
@@ -107,9 +125,13 @@ const fetchAlertReport = async () => {
 
     // 逐个设备获取告警报告并合并
     const alertPromises = devices.value.map(device =>
-      api.getAlertReport(device.id, dto).catch(error => {
+      api.getAlertReport(
+        device.id,
+        dto,
+        { headers: { Token: `${token}` } }
+      ).catch(error => {
         console.error(`设备 ${device.id} 告警获取失败`, error)
-        return { data: { code: 0, data: { alertReports: [] } } } // 失败时返回空报告
+        return { data: { code: 0, data: { alertReports: [] } } }
       })
     )
     const responses = await Promise.all(alertPromises)
@@ -119,7 +141,7 @@ const fetchAlertReport = async () => {
         alerts.value.push(
           ...(response.data.data.alertReports || []).map(report => ({
             ...report,
-            deviceName: device.name // 添加设备名称
+            deviceName: device.name
           }))
         )
       }
@@ -148,9 +170,9 @@ const formatStatus = (status) => {
 
 // 格式化告警级别对应的标签类型
 const getSeverityType = (level) => {
-  if (level === 2) return 'danger' // 高
-  if (level === 1) return 'warning' // 中
-  if (level === 0) return 'info' // 低
+  if (level === 2) return 'danger'
+  if (level === 1) return 'warning'
+  if (level === 0) return 'info'
   return ''
 }
 
