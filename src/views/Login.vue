@@ -48,9 +48,10 @@ const handleLogin = async () => {
       loading.value = true
       try {
         const response = await api.login(loginForm.username, loginForm.password)
-        if (response.data.code === 200 && response.data.data.token) {
-        localStorage.setItem('token', response.data.data.token)
-        localStorage.setItem('username', response.data.data.username) 
+        console.log('登录成功，后端返回信息:', response.data);
+        if (response.data.code === 1 && response.data.data.token) {
+          localStorage.setItem('token', response.data.data.token)
+          localStorage.setItem('username', response.data.data.username) 
           ElMessage.success('登录成功')
           // 检查是否有重定向地址
           const redirectPath = route.query.redirect || '/'
