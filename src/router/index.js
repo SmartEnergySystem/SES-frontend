@@ -34,8 +34,25 @@ const routes = [
         path: 'alerts',
         name: 'AlertManager',
         component: () => import('../components/AlertManager.vue')
+      },
+      // 添加设备管理相关路由
+      {
+        path: 'device',
+        name: 'DeviceManagement',
+        component: () => import('../views/DeviceManagement.vue'),
+        children: [
+          {
+            path: 'list',
+            name: 'DeviceList',
+            component: () => import('../views/DeviceList.vue')
+          },
+          {
+            path: 'add',
+            name: 'DeviceAdd',
+            component: () => import('../views/DeviceAdd.vue')
+          }
+        ]
       }
-      // 如果有用户管理等其他模块，在这里添加
     ]
   },
   // 可以添加一个 404 页面

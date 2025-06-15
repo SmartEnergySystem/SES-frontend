@@ -23,15 +23,17 @@
       <el-icon><WarningFilled /></el-icon>
       <span>告警管理</span>
     </el-menu-item>
-    </el-menu>
+    <el-menu-item index="/device/list">
+      <el-icon><Cpu /></el-icon>
+      <span>设备管理</span>
+    </el-menu-item>
+  </el-menu>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-// Element Plus 图标已在 main.js 全局注册，这里不需要单独导入图标组件本身
-// 但如果需要在 <script setup> 中使用图标组件变量，则需要导入，例如：
-// import { DataLine, Histogram, Setting, WarningFilled, UserFilled } from '@element-plus/icons-vue'
+import { Cpu, DataLine, Histogram, Setting, WarningFilled } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const activeMenu = computed(() => route.path)
