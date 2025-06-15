@@ -77,7 +77,7 @@ const fetchData = async () => {
     if (response.data.code === 200) {
       devices.value = response.data.data.devices
       newAlertsCount.value = response.data.data.newAlertsCount
-      
+
       const totalPower = devices.value.reduce((sum, dev) => sum + (dev.status === 'ON' ? dev.power : 0), 0)
       const now = new Date()
       const currentTime = `${('0'+now.getHours()).slice(-2)}:${('0'+now.getMinutes()).slice(-2)}:${('0'+now.getSeconds()).slice(-2)}`
@@ -103,7 +103,7 @@ const fetchData = async () => {
 const initChart = () => {
   if (powerChartRef.value && !powerChart) {
     powerChart = echarts.init(powerChartRef.value)
-    updateChart() 
+    updateChart()
   }
 }
 
@@ -168,3 +168,4 @@ onUnmounted(() => {
   align-items: center;
 }
 </style>
+

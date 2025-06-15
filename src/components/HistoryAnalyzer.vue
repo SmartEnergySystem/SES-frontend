@@ -178,3 +178,4 @@ onUnmounted(() => {
   window.removeEventListener('resize', resizeCharts)
 })
 </script>
+
