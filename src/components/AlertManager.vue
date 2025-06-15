@@ -14,11 +14,12 @@
           </el-select>
           <el-date-picker
             v-model="timeRange"
-            type="daterange"
+            type="datetimerange"
             range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            value-format="YYYY-MM-DD HH:mm:ss"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+            value-format="YYYY-MM-DD hh:mm:ss"
+            format="YYYY-MM-DD hh:mm:ss"
             clearable
           />
           <el-button type="primary" @click="fetchAlertReport">刷新告警</el-button>
@@ -52,6 +53,18 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '../services/api'
 
+// 格式化当前时间为 YYYY-MM-DD hh:mm:ss
+const formatCurrentTime = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const seconds = String(now.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
 const devices = ref([]) // 设备列表
 const selectedDeviceId = ref(null) // 选中的设备 ID
 const timeRange = ref([]) // 时间范围 [startTime, endTime]
@@ -70,7 +83,7 @@ const loadDevices = async () => {
     const response = await api.getDevicePage(
       { page: 1, pageSize: 100, userId: parseInt(userId) },
     )
-    if (response.data.code === 0 && response.data.data.records.length > 0) {
+    if (response.data.code === 1 && response.data.data.records.length > 0) {
       devices.value = response.data.data.records
     } else {
       ElMessage.info('暂无设备')
@@ -92,11 +105,16 @@ const fetchAlertReport = async () => {
       ElMessage.error('用户未登录，请先登录')
       return
     }
-    // 构造请求的 DTO
-    const dto = timeRange.value.length === 2 ? {
-      startTime: timeRange.value[0],
-      endTime: timeRange.value[1]
-    } : {}
+    // 构造请求的 DTO，未选择时间范围时设置一个很大的时间范围
+    const dto = timeRange.value.length === 2
+      ? {
+          startTime: timeRange.value[0],
+          endTime: timeRange.value[1]
+        }
+      : {
+          startTime: '1970-01-01 00:00:00',
+          endTime: formatCurrentTime().replace('T', ' ')
+        }
 
     // 如果选择了设备，直接查询该设备的告警
     if (selectedDeviceId.value) {
@@ -105,7 +123,7 @@ const fetchAlertReport = async () => {
         dto,
         { headers: { Token: `${token}` } }
       )
-      if (response.data.code === 0) {
+      if (response.data.code === 1) {
         const device = devices.value.find(d => String(d.id) === String(selectedDeviceId.value))
         alerts.value = (response.data.data.alertReports || []).map(report => ({
           ...report,
@@ -136,7 +154,7 @@ const fetchAlertReport = async () => {
     )
     const responses = await Promise.all(alertPromises)
     responses.forEach((response, index) => {
-      if (response.data.code === 0) {
+      if (response.data.code === 1) {
         const device = devices.value[index]
         alerts.value.push(
           ...(response.data.data.alertReports || []).map(report => ({

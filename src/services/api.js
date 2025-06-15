@@ -38,11 +38,10 @@ export const api = {
 
   // 控制设备模式
   setDeviceMode: (deviceId, modeId) => apiClient.post(`/device/${deviceId}/mode`, { modeId }),
-  // 删除策略（解绑策略）统一用综合控制接口
-  deletePolicy: (deviceId, policyId) =>
-    apiClient.post(`/device/${deviceId}`, { isApplyPolicy: 0, policyId }),
+  // 删除策略
+  deletePolicy: (id) => apiClient.delete(`/policy/${id}`),
+  // 获取策略条目
   getPolicyItemsByPolicyId: (policyId) => apiClient.get(`/policyItem/policy/${policyId}`),
-  getDeviceData: (idList) => apiClient.get('/device/data', { params: { idList } }),
 
   // 设备管理接口
   getDevicePage: (params) => apiClient.get('/device/page', { params }),
