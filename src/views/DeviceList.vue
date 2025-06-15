@@ -14,15 +14,18 @@
         :data="deviceList"
         style="width: 100%"
       >
+        <template #empty>
+          <el-empty description="暂无设备数据" />
+        </template>
         <el-table-column prop="name" label="设备名称" />
         <el-table-column prop="type" label="设备类型" />
         <el-table-column label="操作" width="200">
           <template #default="scope">
             <el-button-group>
               <el-button size="small" @click="editDevice(scope.row)">编辑</el-button>
-              <el-button 
-                size="small" 
-                type="danger" 
+              <el-button
+                size="small"
+                type="danger"
                 @click="deleteDevice(scope.row)"
               >删除</el-button>
             </el-button-group>
@@ -62,34 +65,28 @@ const total = ref(0)
 // 获取设备列表
 const fetchDevices = async () => {
   loading.value = true
+  deviceList.value = []
+  total.value = 0
   try {
     const response = await api.getDevicePage({
       page: currentPage.value,
       pageSize: pageSize.value
     })
 
-    // The backend wraps the response. Check the 'code' for success.
+    // Per user specification: code === 1 is SUCCESS.
     if (response.data && response.data.code === 1) {
-      // The actual list is in response.data.data.records
       if (response.data.data && Array.isArray(response.data.data.records)) {
         deviceList.value = response.data.data.records
         total.value = response.data.data.total || 0
-      } else {
-        // This case might happen if backend returns code:0 but no data object.
-        deviceList.value = []
-        total.value = 0
-        console.warn("API reported success but data format is unexpected.", response.data);
       }
     } else {
-      // Handle API error reported in the response body
+      // Any other code is treated as an error.
       ElMessage.error(response.data.message || '获取设备列表失败')
-      console.error('API returned an error:', response.data);
-      deviceList.value = [];
-      total.value = 0;
+      console.error('API returned an error code:', response.data)
     }
   } catch (error) {
-    ElMessage.error('获取设备列表失败: 网络或请求错误')
-    console.error('获取设备列表出错:', error.response || error);
+    ElMessage.error('网络请求失败，请检查连接或服务状态')
+    console.error('获取设备列表出错:', error.response || error)
   } finally {
     loading.value = false
   }
@@ -118,13 +115,17 @@ const deleteDevice = async (device) => {
         type: 'warning',
       }
     )
-    
-    await api.deleteDevice(device.id)
-    ElMessage.success('设备删除成功')
-    fetchDevices() // 重新加载列表
+
+    const response = await api.deleteDevice(device.id)
+    if (response.data.code === 1) {
+       ElMessage.success('设备删除成功')
+       fetchDevices() // 重新加载列表
+    } else {
+       ElMessage.error(response.data.message || '设备删除失败')
+    }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('设备删除失败')
+      ElMessage.error('设备删除请求失败')
       console.error('删除设备出错:', error)
     }
   }

@@ -24,9 +24,11 @@
       </el-table-column>
       <el-table-column label="操作" width="200">
         <template #default="scope">
-          <el-button size="small" type="primary" @click="openEditDialog(scope.row)">新增条目</el-button>
-          <el-button size="small" type="info" @click="openDetailDialog(scope.row)">详情</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(scope.row.id, scope.row.device_id)">解绑</el-button>
+          <el-button-group>
+            <el-button size="small" type="primary" @click="openEditDialog(scope.row)">新增条目</el-button>
+            <el-button size="small" type="info" @click="openDetailDialog(scope.row)">详情</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(scope.row.id, scope.row.device_id)">解绑</el-button>
+          </el-button-group>
         </template>
       </el-table-column>
     </el-table>
@@ -366,7 +368,7 @@ const handleDelete = async (policyId, deviceId) => {
     type: 'warning'
   }).then(async () => {
     try {
-      const response = await api.deletePolicy(deviceId, policyId)
+      const response = await api.deletePolicy(policyId)
       if (response.data.code === 1 || response.data.code === 200) {
         ElMessage.success('策略解绑成功')
         fetchPolicies()

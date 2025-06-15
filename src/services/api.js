@@ -40,6 +40,8 @@ export const api = {
   setDeviceMode: (deviceId, modeId) => apiClient.post(`/device/${deviceId}/mode`, { modeId }),
   // 删除策略
   deletePolicy: (id) => apiClient.delete(`/policy/${id}`),
+  // 删除策略条目
+  deletePolicyItem: (id) => apiClient.delete(`/policyItem/${id}`),
   // 获取策略条目
   getPolicyItemsByPolicyId: (policyId) => apiClient.get(`/policyItem/policy/${policyId}`),
 
